@@ -2,7 +2,7 @@ services:
   postgres:
     build:
       context: .
-      dockerfile: Dockerfile.age
+      dockerfile: Dockerfile
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
