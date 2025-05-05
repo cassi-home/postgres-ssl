@@ -53,3 +53,11 @@ if [[ "$LOG_TO_STDOUT" == "true" ]]; then
 else
     /usr/local/bin/docker-entrypoint.sh "$@"
 fi
+
+psql -v ON_ERROR_STOP=1 --username postgres <<-EOSQL
+  CREATE SCHEMA IF NOT EXISTS ag_catalog;
+  LOAD 'age';
+  CREATE EXTENSION IF NOT EXISTS age SCHEMA ag_catalog;
+  ALTER DATABASE graphdb SET search_path = ag_catalog,public;
+  SELECT ag_catalog.create_graph('test');
+EOSQL
