@@ -4,7 +4,7 @@
 set -e
 
 # Set up needed variables
-SSL_DIR="$PGDATA/data/certs"
+SSL_DIR="/var/lib/postgresql/data/certs"
 
 SSL_SERVER_CRT="$SSL_DIR/server.crt"
 SSL_SERVER_KEY="$SSL_DIR/server.key"
@@ -49,7 +49,7 @@ openssl x509 -req -in "$SSL_SERVER_CSR" -extfile "$SSL_V3_EXT" -extensions v3_re
 chown postgres:postgres "$SSL_SERVER_CRT"
 
 # PostgreSQL configuration, enable ssl and set paths to certificate files
-cat >> "$POSTGRES_CONF_FILE" <<'EOF'
+cat >> "$POSTGRES_CONF_FILE" <<EOF
 ssl = on
 ssl_cert_file = '$SSL_SERVER_CRT'
 ssl_key_file = '$SSL_SERVER_KEY'
