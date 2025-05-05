@@ -49,17 +49,17 @@ openssl x509 -req -in "$SSL_SERVER_CSR" -extfile "$SSL_V3_EXT" -extensions v3_re
 chown postgres:postgres "$SSL_SERVER_CRT"
 
 # PostgreSQL configuration, enable ssl and set paths to certificate files
-cat >> "$POSTGRES_CONF_FILE" <<EOF
+cat >> "$POSTGRES_CONF_FILE" <<'EOF'
 ssl = on
 ssl_cert_file = '$SSL_SERVER_CRT'
 ssl_key_file = '$SSL_SERVER_KEY'
 ssl_ca_file = '$SSL_ROOT_CRT'
 EOF
 
-psql -v ON_ERROR_STOP=1 --username postgres --dbname graphdb <<EOSQL
-CREATE SCHEMA IF NOT EXISTS ag_catalog;
-CREATE EXTENSION IF NOT EXISTS age SCHEMA ag_catalog;
-ALTER DATABASE graphdb SET search_path = ag_catalog,public;
-LOAD 'age';
-SELECT ag_catalog.create_graph('test');
-EOSQL
+# psql -v ON_ERROR_STOP=1 --username postgres --dbname graphdb <<EOSQL
+# CREATE SCHEMA IF NOT EXISTS ag_catalog;
+# CREATE EXTENSION IF NOT EXISTS age SCHEMA ag_catalog;
+# ALTER DATABASE graphdb SET search_path = ag_catalog,public;
+# LOAD 'age';
+# SELECT ag_catalog.create_graph('test');
+# EOSQL
