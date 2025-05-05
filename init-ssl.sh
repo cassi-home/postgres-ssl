@@ -54,6 +54,7 @@ ssl = on
 ssl_cert_file = '$SSL_SERVER_CRT'
 ssl_key_file = '$SSL_SERVER_KEY'
 ssl_ca_file = '$SSL_ROOT_CRT'
+EOF
 
 psql -v ON_ERROR_STOP=1 --username postgres <<-EOSQL
   CREATE SCHEMA IF NOT EXISTS ag_catalog;
@@ -62,6 +63,3 @@ psql -v ON_ERROR_STOP=1 --username postgres <<-EOSQL
   ALTER DATABASE graphdb SET search_path = ag_catalog,public;
   SELECT ag_catalog.create_graph('test');
 EOSQL
-
-
-EOF
