@@ -36,6 +36,5 @@ RUN echo "postgres ALL=(root) NOPASSWD: /usr/bin/mkdir, /bin/chown, /usr/bin/ope
 COPY --chmod=755 init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
 COPY --chmod=755 wrapper.sh /usr/local/bin/wrapper.sh
 
-VOLUME ["/var/lib/postgresql/data/data"]
 ENTRYPOINT ["wrapper.sh"]
 CMD ["postgres", "--port=5432"] 

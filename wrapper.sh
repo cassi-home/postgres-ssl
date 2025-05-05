@@ -53,4 +53,3 @@ if [[ "$LOG_TO_STDOUT" == "true" ]]; then
 else
     /usr/local/bin/docker-entrypoint.sh "$@"
 fi
-
