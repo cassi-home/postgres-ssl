@@ -56,7 +56,7 @@ ssl_key_file = '$SSL_SERVER_KEY'
 ssl_ca_file = '$SSL_ROOT_CRT'
 EOF
 
-psql -v ON_ERROR_STOP=1 --username postgres <<EOSQL
+psql -v ON_ERROR_STOP=1 --username postgres --dbname graphdb <<EOSQL
 CREATE SCHEMA IF NOT EXISTS ag_catalog;
 CREATE EXTENSION IF NOT EXISTS age SCHEMA ag_catalog;
 ALTER DATABASE graphdb SET search_path = ag_catalog,public;
