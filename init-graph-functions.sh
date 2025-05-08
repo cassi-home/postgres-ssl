@@ -586,7 +586,10 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             WHERE node_id = $1
             AND valid_to IS NULL',
             safe_user_id
-        ) USING node_id, updated_properties INTO affected_rows;
+        ) USING node_id, updated_properties;
+        
+        -- Get the number of affected rows
+        GET DIAGNOSTICS affected_rows = ROW_COUNT;
         
         -- Return true if update was successful
         RETURN affected_rows > 0;
