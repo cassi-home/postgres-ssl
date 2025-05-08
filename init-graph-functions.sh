@@ -13,7 +13,7 @@ fi
 
 psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
 
-    CREATE OR REPLACE FUNCTION create_graph(
+    CREATE OR REPLACE FUNCTION test_create_graph(
         user_id TEXT
     ) RETURNS BOOLEAN AS $$
     DECLARE
@@ -105,7 +105,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     END;
     $$ LANGUAGE plpgsql;
 
-    CREATE OR REPLACE FUNCTION create_node(
+    CREATE OR REPLACE FUNCTION test_create_node(
         user_id TEXT,
         entity_type VARCHAR,
         entity_name VARCHAR,
@@ -174,7 +174,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     END;
     $$ LANGUAGE plpgsql;
 
-    CREATE OR REPLACE FUNCTION create_relation(
+    CREATE OR REPLACE FUNCTION test_create_relation(
         user_id TEXT,
         source_id INTEGER,
         target_id INTEGER,

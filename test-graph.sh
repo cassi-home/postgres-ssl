@@ -1,11 +1,22 @@
 #!/bin/bash
 
+# Source the .env file if it exists
+if [ -f .env ]; then
+    source .env
+fi
+
+# Check if PGCONNSTRING is set
+if [ -z "$PGCONNSTRING" ]; then
+    echo "Error: PGCONNSTRING is not set. Please set it in your .env file or environment."
+    exit 1
+fi
+
 psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
 -- Create the graph
-SELECT create_graph('test_123');
+SELECT test_create_graph('test_123');
 
 -- Create first node
-SELECT create_node(
+SELECT test_create_node(
     'test_123',
     'test',
     'test_A',
@@ -13,7 +24,7 @@ SELECT create_node(
 );
 
 -- Create second node
-SELECT create_node(
+SELECT test_create_node(
     'test_123',
     'test',
     'test_B',
@@ -21,7 +32,7 @@ SELECT create_node(
 );
 
 -- Create relation between nodes
-SELECT create_relation(
+SELECT test_create_relation(
     'test_123',
     (SELECT entity_id FROM graph_test_123_nodes WHERE entity_name = 'test_A' AND valid_to IS NULL),
     (SELECT entity_id FROM graph_test_123_nodes WHERE entity_name = 'test_B' AND valid_to IS NULL),
