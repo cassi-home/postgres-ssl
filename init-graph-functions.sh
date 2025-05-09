@@ -437,7 +437,10 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             DELETE FROM graph_%s_nodes 
             WHERE node_id = $1',
             safe_user_id
-        ) USING node_id INTO affected_rows;
+        ) USING node_id;
+        
+        -- Get the number of affected rows
+        GET DIAGNOSTICS affected_rows = ROW_COUNT;
         
         -- Return true if at least one row was affected
         RETURN affected_rows > 0;
@@ -461,7 +464,10 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             DELETE FROM graph_%s_edges 
             WHERE id = $1',
             safe_user_id
-        ) USING edge_id INTO affected_rows;
+        ) USING edge_id;
+        
+        -- Get the number of affected rows
+        GET DIAGNOSTICS affected_rows = ROW_COUNT;
         
         -- Return true if at least one row was affected
         RETURN affected_rows > 0;
