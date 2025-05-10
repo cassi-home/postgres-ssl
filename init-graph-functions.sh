@@ -21,6 +21,37 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     DROP FUNCTION IF EXISTS test_search_nodes(TEXT, TEXT);
     DROP FUNCTION IF EXISTS test_search_edges(TEXT, TEXT);
     DROP FUNCTION IF EXISTS test_read_graph(TEXT);
+    DROP FUNCTION IF EXISTS test_check_graph_exists(TEXT);
+
+    CREATE OR REPLACE FUNCTION test_check_graph_exists(
+        user_id TEXT
+    ) RETURNS BOOLEAN AS $$
+    DECLARE
+        safe_user_id TEXT;
+        nodes_exist BOOLEAN;
+        edges_exist BOOLEAN;
+    BEGIN
+        -- Replace hyphens with underscores for safe table names
+        safe_user_id := regexp_replace(user_id, '-', '_', 'g');
+        
+        -- Check if nodes table exists
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'ag_catalog' 
+            AND table_name = format('graph_%s_nodes', safe_user_id)
+        ) INTO nodes_exist;
+        
+        -- Check if edges table exists
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'ag_catalog' 
+            AND table_name = format('graph_%s_edges', safe_user_id)
+        ) INTO edges_exist;
+        
+        -- Return true only if both tables exist
+        RETURN nodes_exist AND edges_exist;
+    END;
+    $$ LANGUAGE plpgsql;
 
     CREATE OR REPLACE FUNCTION test_create_graph(
         user_id TEXT
