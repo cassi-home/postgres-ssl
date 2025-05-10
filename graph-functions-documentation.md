@@ -124,6 +124,7 @@ Retrieves multiple nodes by their names.
 
 **Returns:**
 A table with the following columns:
+- `node_id`: The unique identifier of each node
 - `node_type`: The type of each node
 - `node_name`: The name of each node
 - `properties`: The properties of each node
@@ -151,13 +152,14 @@ Searches for nodes containing a keyword in their name or properties.
 
 **Returns:**
 A table with the following columns:
+- `node_id`: The unique identifier of each matching node
 - `node_type`: The type of each matching node
 - `node_name`: The name of each matching node
 - `properties`: The properties of each matching node
 
 **Details:**
 - Performs case-insensitive search using ILIKE
-- Searches in both the node_name field and the properties JSON
+- Searches in the node_name field, the node_type field, and the properties JSON
 - Only returns current versions of nodes
 - Orders results by node_name
 - Handles UUIDs by converting hyphens to underscores
@@ -179,12 +181,16 @@ Searches for edges containing a keyword in their properties.
 
 **Returns:**
 A table with the following columns:
-- `edges_type`: The type of each matching edge
+- `edge_id`: The unique identifier of each matching edge
+- `source_id`: The ID of the source node
+- `target_id`: The ID of the target node
+- `edge_type`: The type of each matching edge
 - `properties`: The properties of each matching edge
 
 **Details:**
-- Performs case-insensitive search in the edge properties
+- Performs case-insensitive search in the edge properties and edge type
 - Only returns current versions of edges
+- Orders results by edge_type
 - Handles UUIDs by converting hyphens to underscores
 
 **Example:**
@@ -205,6 +211,7 @@ Retrieves the entire graph structure (both nodes and edges).
 A table with the following columns:
 - `result_type`: 'node' or 'edge' indicating the type of record
 - `id`: The database ID of the record
+- `entity_id`: For nodes, this is the node_id; for edges, this is the edge_id
 - `source_target`: For nodes, this is the node_id; for edges, this is the source node ID
 - `name`: For nodes, this is the node_name; for edges, this is NULL
 - `type`: For nodes, this is the node_type; for edges, this is the edge_type
@@ -326,6 +333,39 @@ SELECT * FROM test_find_edges_between('ab6751ca-a52c-421c-981c-7465f40bc31e', 10
 
 ---
 
+### `test_edges_of(user_id TEXT, node_id INTEGER) RETURNS TABLE`
+
+Gets all edges (both incoming and outgoing) connected to a specific node, including the names of nodes on both sides of each edge.
+
+**Parameters:**
+- `user_id`: The graph instance identifier (can be a UUID with hyphens)
+- `node_id`: The ID of the node to find edges for
+
+**Returns:**
+A table with the following columns:
+- `edge_id`: The ID of the edge
+- `edge_type`: The type of the edge
+- `source_id`: The ID of the source node
+- `source_name`: The name of the source node
+- `target_id`: The ID of the target node
+- `target_name`: The name of the target node
+- `properties`: The properties of the edge
+
+**Details:**
+- Returns both outgoing edges (where the node is the source) and incoming edges (where the node is the target)
+- Only returns current versions of edges and nodes (where valid_to IS NULL)
+- Joins with the nodes table to retrieve node names
+- Results are ordered by edge_type and edge_id
+- Handles UUIDs by converting hyphens to underscores
+
+**Example:**
+```sql
+-- Get all edges connected to node 101 with node names on both sides
+SELECT * FROM test_edges_of('ab6751ca-a52c-421c-981c-7465f40bc31e', 101);
+```
+
+---
+
 ### `test_update_node_property(user_id TEXT, node_id INTEGER, property_name TEXT, property_value JSONB) RETURNS BOOLEAN`
 
 Updates a specific property of a node without creating a new version.
@@ -429,6 +469,9 @@ SELECT test_find_node_by_name('ab6751ca-a52c-421c-981c-7465f40bc31e', 'bob');
 
 -- Find edges between nodes
 SELECT * FROM test_find_edges_between('ab6751ca-a52c-421c-981c-7465f40bc31e', 101, 102);
+
+-- Get all edges connected to a node with node names
+SELECT * FROM test_edges_of('ab6751ca-a52c-421c-981c-7465f40bc31e', 101);
 ```
 
 ### Updating Properties Without Versioning

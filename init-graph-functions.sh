@@ -271,6 +271,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         user_id TEXT,
         node_names TEXT[]
     ) RETURNS TABLE (
+        node_id INTEGER,
         node_type VARCHAR,
         node_name VARCHAR,
         properties JSONB
@@ -283,6 +284,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         
         RETURN QUERY EXECUTE format('
             SELECT 
+                node_id,
                 node_type,
                 node_name,
                 properties
@@ -299,6 +301,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         user_id TEXT,
         keyword TEXT
     ) RETURNS TABLE (
+        node_id INTEGER,
         node_type VARCHAR,
         node_name VARCHAR,
         properties JSONB
@@ -311,16 +314,19 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         
         RETURN QUERY EXECUTE format(
             'SELECT 
+                node_id,
                 node_type, 
                 node_name, 
                 properties 
              FROM graph_%s_nodes 
              WHERE valid_to IS NULL AND (
                 node_name ILIKE %L OR
-                properties::TEXT ILIKE %L
+                properties::TEXT ILIKE %L OR
+                (node_type ILIKE %L)
              )
              ORDER BY node_name',
             safe_user_id,
+            '%' || keyword || '%',
             '%' || keyword || '%',
             '%' || keyword || '%'
         );
@@ -331,7 +337,10 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         user_id TEXT,
         keyword TEXT
     ) RETURNS TABLE (
-        edges_type VARCHAR,
+        edge_id INTEGER,
+        source_id INTEGER,
+        target_id INTEGER,
+        edge_type VARCHAR,
         properties JSONB
     ) AS $$
     DECLARE
@@ -342,13 +351,19 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         
         RETURN QUERY EXECUTE format(
             'SELECT 
+                id AS edge_id,
+                source,
+                target,
                 edge_type, 
                 properties 
              FROM graph_%s_edges 
              WHERE valid_to IS NULL AND (
+                edge_type ILIKE %L OR
                 properties::TEXT ILIKE %L
-             )',
+             )
+             ORDER BY edge_type',
             safe_user_id,
+            '%' || keyword || '%',
             '%' || keyword || '%'
         );
     END;
@@ -359,6 +374,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     ) RETURNS TABLE (
         result_type TEXT,
         id INTEGER,
+        entity_id INTEGER,
         source_target INTEGER,
         name VARCHAR,
         type VARCHAR,
@@ -376,6 +392,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             SELECT 
                 ''node''::TEXT as result_type,
                 id,
+                node_id as entity_id,
                 node_id as source_target,
                 node_name as name,
                 node_type as type,
@@ -389,6 +406,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             SELECT 
                 ''edge''::TEXT as result_type,
                 id,
+                id as entity_id,
                 source as source_target,
                 null as name,
                 edge_type as type,
@@ -412,6 +430,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     DROP FUNCTION IF EXISTS test_find_node_by_name(TEXT, TEXT);
     DROP FUNCTION IF EXISTS test_find_edges_between(TEXT, INTEGER, INTEGER, TEXT);
     DROP FUNCTION IF EXISTS test_update_node_property(TEXT, INTEGER, TEXT, JSONB);
+    DROP FUNCTION IF EXISTS test_edges_of(TEXT, INTEGER);
 
     -- Function to delete a node completely
     CREATE OR REPLACE FUNCTION test_delete_node(
@@ -599,6 +618,65 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         
         -- Return true if update was successful
         RETURN affected_rows > 0;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Function to get all edges connected to a node with node names
+    CREATE OR REPLACE FUNCTION test_edges_of(
+        user_id TEXT,
+        node_id INTEGER
+    ) RETURNS TABLE (
+        edge_id INTEGER,
+        edge_type VARCHAR,
+        source_id INTEGER,
+        source_name VARCHAR,
+        target_id INTEGER,
+        target_name VARCHAR,
+        properties JSONB
+    ) AS $$
+    DECLARE
+        safe_user_id TEXT;
+    BEGIN
+        -- Replace hyphens with underscores for safe table names
+        safe_user_id := regexp_replace(user_id, '-', '_', 'g');
+        
+        RETURN QUERY EXECUTE format('
+            -- Outgoing edges (where the node is the source)
+            SELECT 
+                e.id AS edge_id,
+                e.edge_type,
+                e.source AS source_id,
+                source_node.node_name AS source_name,
+                e.target AS target_id,
+                target_node.node_name AS target_name,
+                e.properties
+            FROM 
+                graph_%1$s_edges e
+                JOIN graph_%1$s_nodes source_node ON e.source = source_node.node_id AND source_node.valid_to IS NULL
+                JOIN graph_%1$s_nodes target_node ON e.target = target_node.node_id AND target_node.valid_to IS NULL
+            WHERE 
+                e.source = $1 AND e.valid_to IS NULL
+            
+            UNION ALL
+            
+            -- Incoming edges (where the node is the target)
+            SELECT 
+                e.id AS edge_id,
+                e.edge_type,
+                e.source AS source_id,
+                source_node.node_name AS source_name,
+                e.target AS target_id,
+                target_node.node_name AS target_name,
+                e.properties
+            FROM 
+                graph_%1$s_edges e
+                JOIN graph_%1$s_nodes source_node ON e.source = source_node.node_id AND source_node.valid_to IS NULL
+                JOIN graph_%1$s_nodes target_node ON e.target = target_node.node_id AND target_node.valid_to IS NULL
+            WHERE 
+                e.target = $1 AND e.valid_to IS NULL
+            
+            ORDER BY edge_type, edge_id
+        ', safe_user_id) USING node_id;
     END;
     $$ LANGUAGE plpgsql;
 

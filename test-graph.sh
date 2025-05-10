@@ -11,74 +11,94 @@ if [ -z "$PGCONNSTRING" ]; then
     exit 1
 fi
 
-# Run the SQL commands
+# Test user ID
+TEST_USER_ID="test-user-123"
+
+# Colors for output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Function to print test results
+print_result() {
+    if [ $1 -eq 0 ]; then
+        echo -e "${GREEN}✓ $2${NC}"
+    else
+        echo -e "${RED}✗ $2${NC}"
+        exit 1
+    fi
+}
+
+echo "Starting graph function tests..."
+
+# Test 1: Create Graph
+echo "Testing test_create_graph..."
 psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
--- Create the graph
-SELECT test_create_graph('test_123');
+SELECT test_create_graph('$TEST_USER_ID');
+EOF
+print_result $? "Create graph"
 
--- First clean the test tables
-TRUNCATE TABLE graph_test_123_nodes CASCADE;
-TRUNCATE TABLE graph_test_123_edges CASCADE;
-
-
--- Create first node
+# Test 2: Create Node
+echo "Testing test_create_node..."
+NODE_ID=$(psql -t -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
 SELECT test_create_node(
-    'test_123',
-    'test',
-    'test_A',
-    '{"x": "y"}'::jsonb
+    '$TEST_USER_ID',
+    'person',
+    'John Doe',
+    '{"age": 30, "city": "New York"}'::jsonb
 );
+EOF
+)
+print_result $? "Create node"
 
--- Create second node
-SELECT test_create_node(
-    'test_123',
-    'test',
-    'test_B',
-    '{"a": "b"}'::jsonb
-);
-
--- Create edge between nodes
+# Test 3: Create Edge
+echo "Testing test_create_edge..."
+EDGE_ID=$(psql -t -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
 SELECT test_create_edge(
-    'test_123',
-    (SELECT node_id FROM graph_test_123_nodes WHERE node_name = 'test_A' AND valid_to IS NULL),
-    (SELECT node_id FROM graph_test_123_nodes WHERE node_name = 'test_B' AND valid_to IS NULL),
-    'CONNECTED_TO',
-    '{"strength": "high"}'::jsonb
+    '$TEST_USER_ID',
+    $NODE_ID,
+    $NODE_ID,
+    'knows',
+    '{"since": "2020"}'::jsonb
 );
+EOF
+)
+print_result $? "Create edge"
 
--- View all nodes
-SELECT * FROM graph_test_123_nodes
-ORDER BY node_id;
+# Test 4: Open Nodes
+echo "Testing test_open_nodes..."
+psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
+SELECT test_open_nodes('$TEST_USER_ID', ARRAY['person']);
+EOF
+print_result $? "Open nodes"
 
--- View all edges
-SELECT * FROM graph_test_123_edges
-ORDER BY id;
+# Test 5: Search Nodes
+echo "Testing test_search_nodes..."
+psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
+SELECT test_search_nodes('$TEST_USER_ID', 'John');
+EOF
+print_result $? "Search nodes"
 
--- Test the test_open_nodes function
-SELECT * FROM test_open_nodes('test_123', ARRAY['test_A', 'test_B']);
+# Test 6: Search Edges
+echo "Testing test_search_edges..."
+psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
+SELECT test_search_edges('$TEST_USER_ID', 'knows');
+EOF
+print_result $? "Search edges"
 
--- Test the test_search_nodes function
-SELECT * FROM test_search_nodes('test_123', 'y');
+# Test 7: Read Graph
+echo "Testing test_read_graph..."
+psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
+SELECT test_read_graph('$TEST_USER_ID');
+EOF
+print_result $? "Read graph"
 
--- Test the test_search_edges function
-SELECT * FROM test_search_edges('test_123', 'high');
+# Cleanup
+echo "Cleaning up test data..."
+psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<EOF
+DROP TABLE IF EXISTS graph_${TEST_USER_ID//-/_}_nodes;
+DROP TABLE IF EXISTS graph_${TEST_USER_ID//-/_}_edges;
+EOF
+print_result $? "Cleanup"
 
--- Test the test_read_graph function
-SELECT * FROM test_read_graph('test_123');
-
--- Create an additional edge to test more complex queries
-SELECT test_create_edge(
-    'test_123',
-    (SELECT node_id FROM graph_test_123_nodes WHERE node_name = 'test_B' AND valid_to IS NULL),
-    (SELECT node_id FROM graph_test_123_nodes WHERE node_name = 'test_A' AND valid_to IS NULL),
-    'DEPENDS_ON',
-    '{"priority": "medium"}'::jsonb
-);
-
--- Test read_graph again with the additional edge
-SELECT * FROM test_read_graph('test_123');
-
--- Exit psql properly
-\q
-EOF 
-
+echo "All tests completed successfully!"
