@@ -404,7 +404,6 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         user_id TEXT
     ) RETURNS TABLE (
         result_type TEXT,
-        id INTEGER,
         entity_id INTEGER,
         source_target INTEGER,
         name VARCHAR,
@@ -422,7 +421,6 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         RETURN QUERY EXECUTE format('
             SELECT 
                 ''node''::TEXT as result_type,
-                id,
                 node_id as entity_id,
                 node_id as source_target,
                 node_name as name,
@@ -436,7 +434,6 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             
             SELECT 
                 ''edge''::TEXT as result_type,
-                id,
                 id as entity_id,
                 source as source_target,
                 null as name,
@@ -446,7 +443,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             FROM graph_%s_edges
             WHERE valid_to IS NULL
             
-            ORDER BY result_type, id',
+            ORDER BY result_type',
             safe_user_id,
             safe_user_id
         );
