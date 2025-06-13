@@ -14,8 +14,8 @@ fi
 psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
 
 -- Drop existing functions to avoid conflicts
-DROP FUNCTION IF EXISTS create_taxonomy_node(VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS update_taxonomy_node(VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS create_taxonomy_node(VARCHAR, VARCHAR, VARCHAR, VARCHAR, JSONB, VARCHAR);
+DROP FUNCTION IF EXISTS update_taxonomy_node(VARCHAR, VARCHAR, VARCHAR, VARCHAR, JSONB, VARCHAR);
 DROP FUNCTION IF EXISTS delete_taxonomy_node(VARCHAR);
 DROP FUNCTION IF EXISTS get_taxonomy_node(VARCHAR);
 DROP FUNCTION IF EXISTS list_taxonomy_nodes();
@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS node_taxonomy (
     description VARCHAR,
     name_constraints VARCHAR,
     columns VARCHAR,
+    generic_properties JSONB,
     valid_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     valid_to TIMESTAMP DEFAULT NULL,
     version INTEGER DEFAULT 0,
@@ -50,6 +51,7 @@ CREATE OR REPLACE FUNCTION create_taxonomy_node(
     p_description VARCHAR,
     p_name_constraints VARCHAR,
     p_columns VARCHAR,
+    p_generic_properties JSONB,
     p_modifying_user VARCHAR
 ) RETURNS INTEGER AS $$
 DECLARE
@@ -72,6 +74,7 @@ BEGIN
         description,
         name_constraints,
         columns,
+        generic_properties,
         version,
         valid_from_version,
         modifying_user
@@ -80,6 +83,7 @@ BEGIN
         p_description,
         p_name_constraints,
         p_columns,
+        p_generic_properties,
         0,
         nextval('taxonomy_version_seq'),
         p_modifying_user
@@ -95,6 +99,7 @@ CREATE OR REPLACE FUNCTION update_taxonomy_node(
     p_description VARCHAR,
     p_name_constraints VARCHAR,
     p_columns VARCHAR,
+    p_generic_properties JSONB,
     p_modifying_user VARCHAR
 ) RETURNS INTEGER AS $$
 DECLARE
@@ -125,6 +130,7 @@ BEGIN
         description,
         name_constraints,
         columns,
+        generic_properties,
         version,
         valid_from_version,
         modifying_user
@@ -133,6 +139,7 @@ BEGIN
         p_description,
         p_name_constraints,
         p_columns,
+        p_generic_properties,
         v_old_version + 1,
         nextval('taxonomy_version_seq'),
         p_modifying_user
@@ -179,6 +186,7 @@ CREATE OR REPLACE FUNCTION get_taxonomy_node(
     description VARCHAR,
     name_constraints VARCHAR,
     columns VARCHAR,
+    generic_properties JSONB,
     version INTEGER,
     valid_from TIMESTAMP,
     modifying_user VARCHAR
@@ -191,6 +199,7 @@ BEGIN
         t.description,
         t.name_constraints,
         t.columns,
+        t.generic_properties,
         t.version,
         t.valid_from,
         t.modifying_user
@@ -208,6 +217,7 @@ RETURNS TABLE (
     description VARCHAR,
     name_constraints VARCHAR,
     columns VARCHAR,
+    generic_properties JSONB,
     version INTEGER,
     valid_from TIMESTAMP,
     modifying_user VARCHAR
@@ -220,6 +230,7 @@ BEGIN
         t.description,
         t.name_constraints,
         t.columns,
+        t.generic_properties,
         t.version,
         t.valid_from,
         t.modifying_user
@@ -238,6 +249,7 @@ CREATE OR REPLACE FUNCTION get_taxonomy_node_history(
     description VARCHAR,
     name_constraints VARCHAR,
     columns VARCHAR,
+    generic_properties JSONB,
     version INTEGER,
     valid_from TIMESTAMP,
     valid_to TIMESTAMP,
@@ -253,6 +265,7 @@ BEGIN
         t.description,
         t.name_constraints,
         t.columns,
+        t.generic_properties,
         t.version,
         t.valid_from,
         t.valid_to,

@@ -709,4 +709,3 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     $$ LANGUAGE plpgsql;
 
 SQL
-
