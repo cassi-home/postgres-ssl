@@ -20,6 +20,7 @@ DROP FUNCTION IF EXISTS delete_taxonomy_node(VARCHAR);
 DROP FUNCTION IF EXISTS get_taxonomy_node(VARCHAR);
 DROP FUNCTION IF EXISTS list_taxonomy_nodes();
 DROP FUNCTION IF EXISTS get_taxonomy_node_history(VARCHAR);
+DROP FUNCTION IF EXISTS format_generic_taxonomy_name(VARCHAR, JSONB);
 
 -- Create sequence for version tracking
 CREATE SEQUENCE IF NOT EXISTS taxonomy_version_seq;
@@ -275,6 +276,52 @@ BEGIN
     FROM node_taxonomy t
     WHERE t.node_type = p_node_type
     ORDER BY t.valid_from_version;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to format a generic taxonomy name using values from a JSONB object
+CREATE OR REPLACE FUNCTION format_generic_taxonomy_name(
+    p_name_template VARCHAR,
+    p_properties JSONB
+) RETURNS VARCHAR AS $$
+DECLARE
+    v_result VARCHAR;
+    v_parts TEXT[];
+    v_part TEXT;
+    v_key TEXT;
+    v_value TEXT;
+BEGIN
+    -- Split the template by spaces and dashes
+    v_parts := string_to_array(p_name_template, ' ');
+    v_result := '';
+    
+    FOR i IN 1..array_length(v_parts, 1) LOOP
+        v_part := v_parts[i];
+        
+        -- Check if the part is a key (enclosed in curly braces)
+        IF v_part ~ '^{.*}$' THEN
+            -- Extract the key name from curly braces
+            v_key := substring(v_part from 2 for length(v_part) - 2);
+            -- Get the value from the JSONB object
+            v_value := p_properties->>v_key;
+            
+            -- If value is null, use the key name
+            IF v_value IS NULL THEN
+                v_value := v_key;
+            END IF;
+            
+            v_result := v_result || v_value;
+        ELSE
+            v_result := v_result || v_part;
+        END IF;
+        
+        -- Add space if not the last part and not a dash
+        IF i < array_length(v_parts, 1) AND v_part != '-' THEN
+            v_result := v_result || ' ';
+        END IF;
+    END LOOP;
+    
+    RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
 
