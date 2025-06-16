@@ -22,6 +22,20 @@ DROP FUNCTION IF EXISTS list_taxonomy_nodes();
 DROP FUNCTION IF EXISTS get_taxonomy_node_history(VARCHAR);
 DROP FUNCTION IF EXISTS format_generic_taxonomy_name(VARCHAR, JSONB);
 
+-- Create logs table if it doesn't exist
+CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    query_text TEXT NOT NULL,
+    query_params JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for logs table
+CREATE INDEX IF NOT EXISTS logs_user_id_idx ON logs (user_id);
+CREATE INDEX IF NOT EXISTS logs_timestamp_idx ON logs (timestamp);
+
 -- Create sequence for version tracking
 CREATE SEQUENCE IF NOT EXISTS taxonomy_version_seq;
 
