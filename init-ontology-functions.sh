@@ -286,14 +286,14 @@ BEGIN
                 source_id, 
                 target_id, 
                 %L, 
-                properties
+                creation_condition.properties
             )
             FROM creation_condition
-            left join user_edges
-            on creation_condition.source_id = user_edges.source
-            and creation_condition.target_id = user_edges.target
-            and user_edges.edge_type = %L
-            where user_edges.edge_type is null // where no match
+            LEFT JOIN user_edges
+                ON creation_condition.source_id = user_edges.source
+                AND creation_condition.target_id = user_edges.target
+                AND user_edges.edge_type = %L
+            WHERE user_edges.edge_type IS NULL -- where no match
         ', 
         p_residence_id, 
         p_residence_id, 
