@@ -17,9 +17,6 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
 DROP FUNCTION IF EXISTS create_ontology_edge(VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR, BOOLEAN, VARCHAR);
 DROP FUNCTION IF EXISTS update_ontology_edge(VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR, BOOLEAN, VARCHAR);
 DROP FUNCTION IF EXISTS delete_ontology_edge(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS get_ontology_edge(VARCHAR, VARCHAR, VARCHAR);
-DROP FUNCTION IF EXISTS list_ontology_edges();
-DROP FUNCTION IF EXISTS get_ontology_edge_history(VARCHAR, VARCHAR, VARCHAR);
 
 -- Create sequence for version tracking
 CREATE SEQUENCE IF NOT EXISTS ontology_version_seq;
@@ -32,6 +29,7 @@ CREATE TABLE IF NOT EXISTS node_ontology (
     target VARCHAR NOT NULL,
     source_column_match VARCHAR,
     target_column_match VARCHAR,
+    creation_condition VARCHAR,
     create_missing_target_node BOOLEAN DEFAULT FALSE,
     valid_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     valid_to TIMESTAMP DEFAULT NULL,
@@ -244,119 +242,86 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get current version of an ontology edge
-CREATE OR REPLACE FUNCTION get_ontology_edge(
-    p_source VARCHAR,
-    p_edge_type VARCHAR,
-    p_target VARCHAR
-) RETURNS TABLE (
-    id INTEGER,
-    source VARCHAR,
-    edge_type VARCHAR,
-    target VARCHAR,
-    source_column_match VARCHAR,
-    target_column_match VARCHAR,
-    create_missing_target_node BOOLEAN,
-    version INTEGER,
-    valid_from TIMESTAMP,
-    modifying_user VARCHAR
-) AS $$
+CREATE OR REPLACE FUNCTION apply_ontology(
+    p_residence_id VARCHAR,
+    p_id INTEGER
+) RETURNS BOOLEAN AS $$
+DECLARE
+    v_query varchar;
+    v_node_type varchar;
+    v_edge_type varchar;
+    v_creation_condition varchar;
+    v_edge_record RECORD;
 BEGIN
-    RETURN QUERY
-    SELECT 
-        t.id,
-        t.source,
-        t.edge_type,
-        t.target,
-        t.source_column_match,
-        t.target_column_match,
-        t.create_missing_target_node,
-        t.version,
-        t.valid_from,
-        t.modifying_user
-    FROM node_ontology t
-    WHERE t.source = p_source
-    AND t.edge_type = p_edge_type
-    AND t.target = p_target
-    AND t.valid_to IS NULL;
-END;
-$$ LANGUAGE plpgsql;
+    -- Loop through ontology rules that match the given node
+    FOR v_edge_record IN
+        SELECT 
+            user_nodes.node_type,
+            node_ontology.edge_type,
+            node_ontology.creation_condition
+        FROM node_ontology
+        INNER JOIN user_nodes ON (
+            (node_ontology.source = user_nodes.node_type OR node_ontology.target = user_nodes.node_type)
+            AND user_nodes.residence_id = p_residence_id
+            AND user_nodes.id = p_id
+            AND user_nodes.valid_to IS NULL
+        )
+        WHERE node_ontology.valid_to IS NULL
+    LOOP
+        v_node_type := v_edge_record.node_type;
+        v_creation_condition := v_edge_record.creation_condition;
+        v_edge_type := v_edge_record.edge_type;
+        
+        -- Substitute the placeholder directly
+        v_creation_condition := replace(v_creation_condition, '{p_id}', p_id::text);
+        
+        -- Build the complete query with CTEs
+        v_query := format('
+            WITH 
+                user_nodes AS (SELECT * FROM user_nodes WHERE residence_id = %L AND valid_to IS NULL), 
+                user_edges AS (SELECT * FROM user_edges WHERE residence_id = %L AND valid_to IS NULL),
+                creation_condition AS (%s)
+            SELECT test_create_edge(
+                %L, 
+                source_id, 
+                target_id, 
+                %L, 
+                properties
+            )
+            FROM creation_condition
+        ', 
+        p_residence_id, 
+        p_residence_id, 
+        v_creation_condition,
+        p_residence_id,
+        v_edge_type
+        );
+        
+        -- Execute the query
+        BEGIN
+            EXECUTE v_query;
+        EXCEPTION
+            WHEN OTHERS THEN
+                -- Log the error but continue processing other rules
+                RAISE WARNING 'Error executing ontology rule for node type %: %', 
+                    v_node_type, SQLERRM;
+        END;
+    END LOOP;
 
--- Function to list all current ontology edges
-CREATE OR REPLACE FUNCTION list_ontology_edges()
-RETURNS TABLE (
-    id INTEGER,
-    source VARCHAR,
-    edge_type VARCHAR,
-    target VARCHAR,
-    source_column_match VARCHAR,
-    target_column_match VARCHAR,
-    create_missing_target_node BOOLEAN,
-    version INTEGER,
-    valid_from TIMESTAMP,
-    modifying_user VARCHAR
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        t.id,
-        t.source,
-        t.edge_type,
-        t.target,
-        t.source_column_match,
-        t.target_column_match,
-        t.create_missing_target_node,
-        t.version,
-        t.valid_from,
-        t.modifying_user
-    FROM node_ontology t
-    WHERE t.valid_to IS NULL
-    ORDER BY t.source, t.edge_type, t.target;
+    RETURN TRUE;
 END;
-$$ LANGUAGE plpgsql;
-
--- Function to get version history of an ontology edge
-CREATE OR REPLACE FUNCTION get_ontology_edge_history(
-    p_source VARCHAR,
-    p_edge_type VARCHAR,
-    p_target VARCHAR
-) RETURNS TABLE (
-    id INTEGER,
-    source VARCHAR,
-    edge_type VARCHAR,
-    target VARCHAR,
-    source_column_match VARCHAR,
-    target_column_match VARCHAR,
-    create_missing_target_node BOOLEAN,
-    version INTEGER,
-    valid_from TIMESTAMP,
-    valid_to TIMESTAMP,
-    valid_from_version INTEGER,
-    valid_to_version INTEGER,
-    modifying_user VARCHAR
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        t.id,
-        t.source,
-        t.edge_type,
-        t.target,
-        t.source_column_match,
-        t.target_column_match,
-        t.create_missing_target_node,
-        t.version,
-        t.valid_from,
-        t.valid_to,
-        t.valid_from_version,
-        t.valid_to_version,
-        t.modifying_user
-    FROM node_ontology t
-    WHERE t.source = p_source
-    AND t.edge_type = p_edge_type
-    AND t.target = p_target
-    ORDER BY t.valid_from_version;
-END;
-$$ LANGUAGE plpgsql;
-
+$$ LANGUAGE plpgsql; 
 SQL
+
+
+
+SELECT 
+    source.id as source_id, 
+    coalesce(target.id, test_create_node(source.residence_id, 'utility_company', '', concat('{""vendor_name"" : ""', source.properties->>'provider_name', '""}')::jsonb)) as target_id,
+    '{}'::jsonb as properties 
+FROM user_nodes source 
+LEFT JOIN user_nodes target 
+    ON source.properties['provider_name'] = target.properties['vendor_name']
+    AND target.node_type = 'utility_company'
+WHERE source.node_type = 'electric_bill' 
+    AND source.id = {p_id}::integer

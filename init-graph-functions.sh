@@ -149,7 +149,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
 
     CREATE OR REPLACE FUNCTION test_create_node(
         user_id TEXT,
-        node_type VARCHAR,
+        p_node_type VARCHAR,
         node_name VARCHAR,
         properties JSONB
     ) RETURNS INTEGER AS $$
@@ -159,6 +159,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         existing_version INTEGER;
         new_node_id INTEGER;
         merged_properties JSONB;
+        node_taxonomy_properties JSONB;
         safe_user_id TEXT;
     BEGIN
         -- Replace hyphens with underscores for safe table names
@@ -188,7 +189,15 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             -- Merge old and new properties, with new properties taking precedence
             merged_properties := COALESCE(existing_properties, '{}'::jsonb) || properties;
         ELSE
-            merged_properties := properties;
+            -- Get generic properties for this node_type from node_taxonomy
+            SELECT COALESCE(generic_properties, '{}'::jsonb) INTO node_taxonomy_properties
+            FROM ag_catalog.node_taxonomy
+            WHERE node_type = $1
+            AND valid_to IS NULL
+            LIMIT 1;
+            
+            -- Merge generic properties with provided properties, with provided properties taking precedence
+            merged_properties := node_taxonomy_properties || properties;
             existing_version := -1; -- Start at -1 so first version will be 0
         END IF;
 
@@ -211,7 +220,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         ) INTO new_node_id 
         USING 
             COALESCE(existing_node_id, nextval(format('graph_%s_nodes_id_seq', safe_user_id))),
-            node_type,
+            p_node_type,
             node_name,
             existing_version + 1,
             merged_properties;
@@ -707,5 +716,6 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         ', safe_user_id) USING node_id;
     END;
     $$ LANGUAGE plpgsql;
-
 SQL
+
+     
