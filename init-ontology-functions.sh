@@ -289,11 +289,17 @@ BEGIN
                 properties
             )
             FROM creation_condition
+            left join user_edges
+            on creation_condition.source_id = user_edges.source
+            and creation_condition.target_id = user_edges.target
+            and user_edges.edge_type = %L
+            where user_edges.edge_type is null // where no match
         ', 
         p_residence_id, 
         p_residence_id, 
         v_creation_condition,
         p_residence_id,
+        v_edge_type,
         v_edge_type
         );
         
@@ -312,16 +318,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql; 
 SQL
-
-
-
-SELECT 
-    source.id as source_id, 
-    coalesce(target.id, test_create_node(source.residence_id, 'utility_company', '', concat('{""vendor_name"" : ""', source.properties->>'provider_name', '""}')::jsonb)) as target_id,
-    '{}'::jsonb as properties 
-FROM user_nodes source 
-LEFT JOIN user_nodes target 
-    ON source.properties['provider_name'] = target.properties['vendor_name']
-    AND target.node_type = 'utility_company'
-WHERE source.node_type = 'electric_bill' 
-    AND source.id = {p_id}::integer
