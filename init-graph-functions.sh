@@ -22,6 +22,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     DROP FUNCTION IF EXISTS test_search_edges(TEXT, TEXT);
     DROP FUNCTION IF EXISTS test_read_graph(TEXT);
     DROP FUNCTION IF EXISTS test_check_graph_exists(TEXT);
+    DROP FUNCTION IF EXISTS match(TEXT, JSONB);
 
     CREATE OR REPLACE FUNCTION test_check_graph_exists(
         user_id TEXT
@@ -157,6 +158,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         existing_node_id INTEGER;
         existing_properties JSONB;
         existing_version INTEGER;
+        v_node_name VARCHAR;
         new_node_id INTEGER;
         merged_properties JSONB;
         node_taxonomy_properties JSONB;
@@ -164,6 +166,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     BEGIN
         -- Replace hyphens with underscores for safe table names
         safe_user_id := regexp_replace(user_id, '-', '_', 'g');
+        v_node_name := coalesce(node_name, format_generic_taxonomy_name(p_node_type, properties));
         
         -- First, check if a node with this name exists and get its node_id, properties, and version
         EXECUTE format('
@@ -173,7 +176,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             AND valid_to IS NULL 
             LIMIT 1',
             safe_user_id
-        ) INTO existing_node_id, existing_properties, existing_version USING node_name;
+        ) INTO existing_node_id, existing_properties, existing_version USING v_node_name;
 
         -- If node exists, deprecate it
         IF existing_node_id IS NOT NULL THEN
@@ -183,7 +186,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
                 WHERE node_name = $1 
                 AND valid_to IS NULL',
                 safe_user_id
-            ) USING node_name;
+            ) USING v_node_name;
             
             new_node_id := existing_node_id;
             -- Merge old and new properties, with new properties taking precedence
@@ -221,7 +224,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
         USING 
             COALESCE(existing_node_id, nextval(format('graph_%s_nodes_id_seq', safe_user_id))),
             p_node_type,
-            node_name,
+            v_node_name,
             existing_version + 1,
             merged_properties;
 
@@ -468,6 +471,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     DROP FUNCTION IF EXISTS test_find_edges_between(TEXT, INTEGER, INTEGER, TEXT);
     DROP FUNCTION IF EXISTS test_update_node_property(TEXT, INTEGER, TEXT, JSONB);
     DROP FUNCTION IF EXISTS test_edges_of(TEXT, INTEGER);
+    DROP FUNCTION IF EXISTS match(TEXT, INTEGER);
 
     -- Function to delete a node completely
     CREATE OR REPLACE FUNCTION test_delete_node(
@@ -714,6 +718,52 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
             
             ORDER BY edge_type, edge_id
         ', safe_user_id) USING node_id;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Function to get all edges connected to a node with node names
+    CREATE OR REPLACE FUNCTION match(
+        p_residence_id TEXT,
+        p_properties_template JSONB
+    ) RETURNS TABLE (
+        id          INTEGER,
+        node_id     INTEGER,
+        node_type   VARCHAR,
+        node_name   VARCHAR,
+        version     INTEGER,
+        created_at  TIMESTAMP,
+        valid_from  TIMESTAMP,
+        valid_to    TIMESTAMP,
+        properties  JSONB
+    ) AS $$
+    DECLARE
+        safe_user_id TEXT;
+        sql_query TEXT;
+    BEGIN
+        safe_user_id := regexp_replace(p_residence_id, '-', '_', 'g');
+        
+        sql_query := format('
+            SELECT 
+                n.id,
+                n.node_id,
+                n.node_type,
+                n.node_name,
+                n.version,
+                n.created_at,
+                n.valid_from,
+                n.valid_to,
+                n.properties
+            FROM user_nodes n
+            WHERE n.valid_to IS NULL
+            AND NOT EXISTS (
+                SELECT 1 
+                FROM jsonb_each_text(%L::jsonb) as pt(key, value)
+                LEFT JOIN jsonb_each_text(n.properties) as p(key, value) ON p.key = pt.key
+                WHERE pt.key IS NOT NULL 
+                AND (p.key IS NULL OR NOT (p.value = pt.value OR p.value ILIKE pt.value))
+            )', p_properties_template);
+
+        RETURN QUERY EXECUTE sql_query;
     END;
     $$ LANGUAGE plpgsql;
 SQL
