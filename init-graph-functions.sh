@@ -722,7 +722,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     $$ LANGUAGE plpgsql;
 
     -- Function to get all edges connected to a node with node names
-    CREATE OR REPLACE FUNCTION match(
+    CREATE OR REPLACE FUNCTION test_match(
         p_residence_id TEXT,
         p_properties_template JSONB
     ) RETURNS TABLE (
@@ -753,7 +753,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
                 n.valid_from,
                 n.valid_to,
                 n.properties
-            FROM user_nodes n
+            FROM graph_%s_nodes n
             WHERE n.valid_to IS NULL
             AND NOT EXISTS (
                 SELECT 1 
@@ -761,7 +761,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
                 LEFT JOIN jsonb_each_text(n.properties) as p(key, value) ON p.key = pt.key
                 WHERE pt.key IS NOT NULL 
                 AND (p.key IS NULL OR NOT (p.value = pt.value OR p.value ILIKE pt.value))
-            )', p_properties_template);
+            )', safe_user_id, p_properties_template);
 
         RETURN QUERY EXECUTE sql_query;
     END;
