@@ -722,7 +722,7 @@ psql -v ON_ERROR_STOP=1 "$PGCONNSTRING" <<'SQL'
     $$ LANGUAGE plpgsql;
 
     -- Function to get all edges connected to a node with node names
-    CREATE OR REPLACE FUNCTION test_match(
+    CREATE OR REPLACE FUNCTION match(
         p_residence_id TEXT,
         p_properties_template JSONB
     ) RETURNS TABLE (
